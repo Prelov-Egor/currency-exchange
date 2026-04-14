@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Обмен Валют • НБ РБ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; }
+        .card { box-shadow: 0 15px 35px rgba(0,0,0,0.1); border: none; }
+        .nav-tabs .nav-link { font-size: 1.05rem; }
+        .nav-tabs .nav-link.active { font-weight: bold; color: #0d6efd; }
+        table th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="display-5 fw-bold text-primary">🔄 Обмен валют</h1>
+        <p class="lead text-muted">Официальные курсы Национального банка Республики Беларусь</p>
+    </div>
+
+    <!-- Вкладки -->
+    <ul class="nav nav-tabs mb-4 justify-content-center">
+        <li class="nav-item"><a class="nav-link active" id="tab-exchange" href="#">Обмен валют</a></li>
+        <li class="nav-item"><a class="nav-link" id="tab-pending" href="#">Незавершённые</a></li>
+        <li class="nav-item"><a class="nav-link" id="tab-history" href="#">История сделок</a></li>
+        <li class="nav-item"><a class="nav-link" id="tab-report" href="#">Отчёт за период</a></li>
+    </ul>
+
+    <!-- 1. Обмен валют -->
+    <div id="panel-exchange">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-body p-5">
+                        <form id="exchangeForm">
+                            <div class="row g-4">
+                                <div class="col-md-5">
+                                    <label class="form-label fw-semibold">Из валюты</label>
+                                    <select id="source" class="form-select form-select-lg" required></select>
+                                </div>
+                                <div class="col-md-2 text-center pt-4">
+                                    <i class="fas fa-exchange-alt fa-2x text-primary"></i>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label fw-semibold">В валюту</label>
+                                    <select id="target" class="form-select form-select-lg" required></select>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <label class="form-label fw-semibold">Сумма</label>
+                                <input type="number" id="amount" class="form-control form-control-lg" value="100" step="0.01" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">
+                                <i class="fas fa-calculator me-2"></i> Рассчитать обмен
+                            </button>
+                        </form>
+                        <div id="result" class="mt-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Незавершённые сделки -->
+    <div id="panel-pending" class="d-none">
+        <div class="card">
+            <div class="card-body">
+                <h5>Незавершённые сделки</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead><tr><th>ID</th><th>Дата</th><th>Из</th><th>В</th><th>Сумма</th><th>Курс</th></tr></thead>
+                        <tbody id="pending-body"></tbody>
+                    </table>
+                </div>
+                <div id="no-pending" class="text-center text-muted py-5 d-none">
+                    Нет незавершённых сделок
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. История всех сделок -->
+    <div id="panel-history" class="d-none">
+        <div class="card">
+            <div class="card-body">
+                <h5>История всех сделок</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead><tr><th>ID</th><th>Дата</th><th>Из</th><th>В</th><th>Сумма</th><th>Курс</th><th>Статус</th></tr></thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Отчёт за период -->
+    <div id="panel-report" class="d-none">
+        <div class="card">
+            <div class="card-body">
+                <h5>Отчёт по сделкам за период</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <label>Дата с</label>
+                        <input type="date" id="report-from" class="form-control" value="2026-04-01">
+                    </div>
+                    <div class="col-md-3">
+                        <label>Дата по</label>
+                        <input type="date" id="report-to" class="form-control" value="2026-04-11">
+                    </div>
+                    <div class="col-md-3">
+                        <label>Валюта</label>
+                        <select id="report-currency" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button onclick="loadReport()" class="btn btn-primary w-100">Показать отчёт</button>
+                    </div>
+                </div>
+                <div id="report-result"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currencies = [];
+
+    async function loadCurrencies() {
+        try {
+            const res = await fetch('/api/v1/currencies');
+            currencies = await res.json();
+
+            const source = document.getElementById('source');
+            const target = document.getElementById('target');
+            const reportCur = document.getElementById('report-currency');
+
+            source.innerHTML = target.innerHTML = reportCur.innerHTML = '<option value="">Выберите...</option>';
+
+            currencies.forEach(c => {
+                const opt = new Option(c.name, c.code);
+                source.add(opt.cloneNode(true));
+                target.add(opt.cloneNode(true));
+                reportCur.add(opt);
+            });
+
+            source.value = "431";
+            target.value = "451";
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadPendingDeals() {
+        try {
+            const res = await fetch('/api/v1/deals/pending');
+            const deals = await res.json();
+            const tbody = document.getElementById('pending-body');
+            const noPending = document.getElementById('no-pending');
+
+            tbody.innerHTML = '';
+
+            if (deals.length === 0) {
+                noPending.classList.remove('d-none');
+                return;
+            }
+            noPending.classList.add('d-none');
+
+            deals.forEach(d => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><strong>${d.deal_id}</strong></td>
+                    <td>${new Date(d.created_at).toLocaleString('ru-RU')}</td>
+                    <td>${d.source_amount} <strong>${d.source_currency}</strong></td>
+                    <td>${d.target_amount} <strong>${d.target_currency}</strong></td>
+                    <td><strong>${d.exchange_rate}</strong></td>`;
+                tbody.appendChild(row);
+            });
+        } catch (err) { console.error(err); }
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch('/api/v1/deals/history');
+            const deals = await res.json();
+            const tbody = document.getElementById('history-body');
+
+            tbody.innerHTML = '';
+
+            deals.forEach(d => {
+                const statusColor = d.status === 'confirmed' ? 'success' : 'danger';
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><strong>${d.deal_id}</strong></td>
+                    <td>${new Date(d.created_at).toLocaleString('ru-RU')}</td>
+                    <td>${d.source_amount} <strong>${d.source_currency}</strong></td>
+                    <td>${d.target_amount} <strong>${d.target_currency}</strong></td>
+                    <td><strong>${d.exchange_rate}</strong></td>
+                    <td><span class="badge bg-${statusColor}">${d.status}</span></td>`;
+                tbody.appendChild(row);
+            });
+        } catch (err) { console.error(err); }
+    }
+
+    async function loadReport() {
+        // ... (код отчёта остаётся как был ранее)
+        const from = document.getElementById('report-from').value;
+        const to = document.getElementById('report-to').value;
+        const cur = document.getElementById('report-currency').value;
+        const url = `/api/v1/reports/deals?from_date=${from}&to_date=${to}${cur ? '&currency=' + cur : ''}`;
+
+        const resultDiv = document.getElementById('report-result');
+        resultDiv.innerHTML = `<div class="text-center"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            let html = `<p><strong>Период:</strong> ${from} — ${to} | Всего сделок: ${data.total_deals}</p>`;
+            html += `<table class="table"><thead><tr><th>Валюта</th><th>Получено</th><th>Ушло</th><th>Кол-во</th></tr></thead><tbody>`;
+            data.items.forEach(item => {
+                html += `<tr><td><strong>${item.currency}</strong></td><td>${Number(item.cash_in).toFixed(2)}</td><td>${Number(item.cash_out).toFixed(2)}</td><td>${item.deals_count}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+            resultDiv.innerHTML = html;
+        } catch (err) {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Ошибка при загрузке отчёта</div>`;
+        }
+    }
+
+    // Переключение вкладок
+    document.getElementById('tab-exchange').addEventListener('click', () => {
+        document.getElementById('panel-exchange').classList.remove('d-none');
+        document.getElementById('panel-pending').classList.add('d-none');
+        document.getElementById('panel-history').classList.add('d-none');
+        document.getElementById('panel-report').classList.add('d-none');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('tab-exchange').classList.add('active');
+    });
+
+    document.getElementById('tab-pending').addEventListener('click', () => {
+        document.getElementById('panel-exchange').classList.add('d-none');
+        document.getElementById('panel-pending').classList.remove('d-none');
+        document.getElementById('panel-history').classList.add('d-none');
+        document.getElementById('panel-report').classList.add('d-none');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('tab-pending').classList.add('active');
+        loadPendingDeals();
+    });
+
+    document.getElementById('tab-history').addEventListener('click', () => {
+        document.getElementById('panel-exchange').classList.add('d-none');
+        document.getElementById('panel-pending').classList.add('d-none');
+        document.getElementById('panel-history').classList.remove('d-none');
+        document.getElementById('panel-report').classList.add('d-none');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('tab-history').classList.add('active');
+        loadHistory();
+    });
+
+    document.getElementById('tab-report').addEventListener('click', () => {
+        document.getElementById('panel-exchange').classList.add('d-none');
+        document.getElementById('panel-pending').classList.add('d-none');
+        document.getElementById('panel-history').classList.add('d-none');
+        document.getElementById('panel-report').classList.remove('d-none');
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('tab-report').classList.add('active');
+    });
+
+    // Форма обмена и confirmDeal (оставляем как было)
+    document.getElementById('exchangeForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = `<div class="text-center"><div class="spinner-border text-primary"></div></div>`;
+
+        try {
+            const res = await fetch('/api/v1/exchange/quote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_currency: document.getElementById('source').value,
+                    target_currency: document.getElementById('target').value,
+                    amount: parseFloat(document.getElementById('amount').value)
+                })
+            });
+
+            const data = await res.json();
+
+            resultDiv.innerHTML = `
+                <div class="alert alert-success p-4">
+                    <h5>✅ Обмен рассчитан</h5>
+                    <p class="fs-4">${data.source_amount} <strong>${data.source_currency}</strong> → ${data.target_amount} <strong>${data.target_currency}</strong></p>
+                    <p><strong>Курс:</strong> 1 ${data.source_currency} = ${data.exchange_rate} ${data.target_currency}</p>
+                    <p><strong>Deal ID:</strong> <span class="badge bg-secondary">${data.deal_id}</span></p>
+                    <div class="mt-4 d-flex gap-3">
+                        <button onclick="confirmDeal(${data.deal_id}, 'confirm')" class="btn btn-success btn-lg flex-fill">✅ Подтвердить</button>
+                        <button onclick="confirmDeal(${data.deal_id}, 'reject')" class="btn btn-outline-danger btn-lg flex-fill">❌ Отклонить</button>
+                    </div>
+                </div>`;
+        } catch (err) {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Ошибка при расчёте</div>`;
+        }
+    });
+
+    async function confirmDeal(deal_id, action) {
+        const res = await fetch('/api/v1/exchange/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deal_id, action })
+        });
+        const data = await res.json();
+        alert(data.message);
+        document.getElementById('result').innerHTML = '';
+        loadPendingDeals();
+        loadHistory();
+    }
+
+    window.onload = () => {
+        loadCurrencies();
+    };
+</script>
+</body>
+</html>

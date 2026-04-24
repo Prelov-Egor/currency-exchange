@@ -31,7 +31,7 @@ class ExchangeConfirmResponse(BaseModel):
     message: str
 
 
-# === СХЕМЫ ДЛЯ ОТЧЁТА ===
+
 class ReportItem(BaseModel):
     currency: str
     cash_in: Decimal
@@ -46,7 +46,7 @@ class ReportResponse(BaseModel):
     items: list[ReportItem]
 
 
-# === СХЕМА ДЛЯ СПИСКА НЕЗАВЕРШЁННЫХ СДЕЛОК ===
+#незавершенные сделки
 class PendingDealResponse(BaseModel):
     deal_id: int
     source_currency: str
@@ -57,7 +57,7 @@ class PendingDealResponse(BaseModel):
     created_at: datetime
 
 
-# === СХЕМА ДЛЯ ИСТОРИИ ВСЕХ СДЕЛОК ===
+#история
 class DealHistoryResponse(BaseModel):
     deal_id: int
     source_currency: str

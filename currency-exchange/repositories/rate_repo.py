@@ -15,57 +15,62 @@ class RateRepository:
         self.session = session
 
     async def save_rates(self, rates_data: list[dict]) -> None:
-        """Сохраняет курсы в БД (идемпотентно) с улучшенной защитой"""
+        """Сохранение курсов в БД с проверкой на дубликаты"""
         saved_count = 0
         skipped_count = 0
 
         for item in rates_data:
-            # Улучшенная защита от отсутствующих полей
+            # Обработка различных вариантов ключей в ответе API
             currency_code = (
-                item.get("Cur_Abbr") or item.get("CurAbbr") or str(item.get("Cur_ID", "")).strip()
+                item.get("Cur_Abbr")
+                or item.get("CurAbbr")
+                or str(item.get("Cur_ID", "")).strip()
             )
 
             official_rate = item.get("Cur_OfficialRate")
 
-            # Пропускаем некорректные записи
-            if not currency_code or currency_code == "" or official_rate is None:
-                logger.warning(f"Пропущена запись без кода валюты: {item.get('Cur_ID')}")
+            # Валидация входных данных
+            if not currency_code or official_rate is None:
+                logger.warning(f"Skipping record with missing data: ID {item.get('Cur_ID')}")
                 skipped_count += 1
                 continue
 
             try:
-                rate_obj = CurrencyRate(
-                    date=date.fromisoformat(item["Date"][:10]),
-                    currency_code=currency_code.upper(),
-                    scale=item.get("Cur_Scale", 1),
-                    rate=Decimal(str(official_rate)),
-                )
+                rate_val = Decimal(str(official_rate))
+                rate_date = date.fromisoformat(item["Date"][:10])
+                code_upper = currency_code.upper()
 
-                # Проверяем существование
+                # Проверка наличия записи в базе для предотвращения дублирования
                 stmt = select(CurrencyRate).where(
-                    CurrencyRate.date == rate_obj.date,
-                    CurrencyRate.currency_code == rate_obj.currency_code,
+                    CurrencyRate.date == rate_date,
+                    CurrencyRate.currency_code == code_upper,
                 )
                 result = await self.session.execute(stmt)
                 existing = result.scalar_one_or_none()
 
                 if existing:
-                    existing.rate = rate_obj.rate
-                    existing.scale = rate_obj.scale
+                    existing.rate = rate_val
+                    existing.scale = item.get("Cur_Scale", 1)
                 else:
-                    self.session.add(rate_obj)
+                    new_rate = CurrencyRate(
+                        date=rate_date,
+                        currency_code=code_upper,
+                        scale=item.get("Cur_Scale", 1),
+                        rate=rate_val,
+                    )
+                    self.session.add(new_rate)
 
                 saved_count += 1
 
             except Exception as e:
-                logger.error(f"Ошибка при обработке валюты {currency_code}: {e}")
+                logger.error(f"Error processing currency {currency_code}: {e}")
                 skipped_count += 1
 
         await self.session.commit()
-        logger.info(f"✅ Сохранено {saved_count} курсов | Пропущено {skipped_count} записей")
+        logger.info(f"Sync complete. Saved: {saved_count}, Skipped: {skipped_count}")
 
     async def get_rates_by_date(self, target_date: date) -> list[CurrencyRate]:
-        """Возвращает все курсы на указанную дату"""
+        """Получение списка курсов на конкретную дату"""
         stmt = select(CurrencyRate).where(CurrencyRate.date == target_date)
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())

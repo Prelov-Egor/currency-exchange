@@ -27,7 +27,7 @@ frontend_router = APIRouter(tags=["frontend"])
 templates = Jinja2Templates(directory="templates")
 
 
-# Маппинг кодов НБ РБ
+
 CURRENCY_NAMES = {
     "431": "USD — Доллар США",
     "451": "EUR — Евро",
@@ -105,7 +105,7 @@ async def get_report(from_date: date, to_date: date, currency: str | None = None
         }
 
 
-# === СПИСОК НЕЗАВЕРШЁННЫХ СДЕЛОК ===
+#незавешённые
 @router.get("/deals/pending", response_model=list[PendingDealResponse])
 async def get_pending_deals():
     async with AsyncSessionLocal() as session:
@@ -113,7 +113,7 @@ async def get_pending_deals():
         return await deal_repo.get_pending_deals()
 
 
-# === ИСТОРИЯ ВСЕХ СДЕЛОК ===
+#все сделки
 @router.get("/deals/history", response_model=list[DealHistoryResponse])
 async def get_all_deals():
     async with AsyncSessionLocal() as session:
